@@ -1,8 +1,21 @@
 import os
-import pandas as pd
-import datetime
 import time
+import pathlib
+import datetime
+import pandas as pd
+import logging.config
+import logging.handlers
 from riotwatcher import LolWatcher
+
+
+#cfg file path for log
+log_file_path = str(pathlib.Path().absolute()) + "/config/config_log.cfg"
+
+#logging config
+logging.config.fileConfig(log_file_path)
+
+#logger
+logger = logging.getLogger('root')
 
 #Start of timer
 start_time = time.time()
@@ -12,50 +25,61 @@ def get_head(games_rank_inf:dict) -> list:
     """
     Returns the keywords/headings of each column
     """
-    headers = []
-    for data in games_rank_inf:
-        if data == 'info':
-            for dat in games_rank_inf[data]:
-                if dat == 'participants':
-                    for row in games_rank_inf[data][dat]:
-                        for head in row:
-                            if not head in headers:
-                                headers.append(head)
-    return headers
+    try:
+        headers = []
+        for data in games_rank_inf:
+            if data == 'info':
+                for dat in games_rank_inf[data]:
+                    if dat == 'participants':
+                        for row in games_rank_inf[data][dat]:
+                            for head in row:
+                                if not head in headers:
+                                    headers.append(head)
+        return headers
+    except:
+        logger.info("Error getting headers")
 
 
 def date_conversion(date:list) -> list:
     """
     Convert date string to epoch time
-    
     date: list date
     retrun: date list int epoch format, [start, end]
     """ 
-    format = '%Y/%m/%d'
-    date_ini = date[0]
-    date_fn = date[1]
-    epoch = datetime.datetime(1970, 1, 1)
-    epoch_ini = int ((datetime.datetime.strptime(date_ini, format) - epoch).total_seconds())
-    epoch_fn = int ((datetime.datetime.strptime(date_fn, format) - epoch).total_seconds())
-    return [epoch_ini, epoch_fn]
+    try:
+        format = '%Y/%m/%d'
+        date_ini = date[0]
+        date_fn = date[1]
+        epoch = datetime.datetime(1970, 1, 1)
+        epoch_ini = int ((datetime.datetime.strptime(date_ini, format) - epoch).total_seconds())
+        epoch_fn = int ((datetime.datetime.strptime(date_fn, format) - epoch).total_seconds())
+        logger.info('Successful date conversion')
+        return [epoch_ini, epoch_fn]
+    except:
+        logger.info('Date conversion error')
 
 def name_server(region:str) -> list:
     """
     Provide the server name and region for the correct use of the API
-
     region: user region
     return: List with server name and region
     """
-    region = region.upper()
-    servers = {
-            'BR':['BR1', 'AMERICAS'], 'NA':['NA1','AMERICAS'], 'LAN':['LA1', 'AMERICAS'], 'LAS':['LA2', 'AMERICAS'],
-            'KR':['KR', 'ASIA '], 'JP': ['JP1', 'ASIA'],
-            'EUN':['EUN1', 'EUROPE '], 'EUW':['EUW1', 'EUROPE'], 'TR':['TR1', 'EUROPE'], 'RU':['RU', 'EUROPE'],
-            'OCE':['OC1','SEA']
-            }
-    for server in servers:
-        if server == region:
-            return servers[server]
+    try:
+        region = region.upper()
+        servers = {
+                'BR':['BR1', 'AMERICAS'], 'NA':['NA1','AMERICAS'], 'LAN':['LA1', 'AMERICAS'], 'LAS':['LA2', 'AMERICAS'],
+                'KR':['KR', 'ASIA '], 'JP': ['JP1', 'ASIA'],
+                'EUN':['EUN1', 'EUROPE '], 'EUW':['EUW1', 'EUROPE'], 'TR':['TR1', 'EUROPE'], 'RU':['RU', 'EUROPE'],
+                'OCE':['OC1','SEA']
+                }
+        for server in servers:
+            if server == region:
+                logger.info('Server obtained successfully')
+                return servers[server]
+            else:
+                pass
+    except:
+        logger.info('Failed to get server')
 
 def pick_games(token:str, user:str, data_server:list, date:list) -> list:
     """
@@ -84,10 +108,10 @@ def pick_games(token:str, user:str, data_server:list, date:list) -> list:
         
         #List of games in ranker (420 = Solo/Q, 440 = Flex)
         list_games_rank = lol_watcher.match.matchlist_by_puuid(region,usuario['puuid'],0,100,420,'ranked',date_c[0],date_c[1])
-
+        logger.info('Successful matchmaking')
         return list_games_rank
     except:
-        print("¡Verifica tu token y vuelve a intentar!")
+        logger.info('Get failed matches, verify token, user and region')
 
 
 def game_data(token:str, data_server:list, list_games_rank:list) -> list:
@@ -104,30 +128,35 @@ def game_data(token:str, data_server:list, list_games_rank:list) -> list:
             #100 requests every 2 minute(s)
 
     #API connection
-    lol_watcher = LolWatcher(token)
-    server = data_server[1]
+    try:
+        lol_watcher = LolWatcher(token)
+        server = data_server[1]
 
-    data_games=[]
-    for game in list_games_rank:
-        #Ranker games information
-        games_rank_inf = lol_watcher.match.by_id(server, game)
-        participants = []
-        headers = get_head(games_rank_inf)
+        data_games=[]
+        for game in list_games_rank:
+            #Ranker games information
+            games_rank_inf = lol_watcher.match.by_id(server, game)
+            participants = []
+            headers = get_head(games_rank_inf)
+            i = 0
+            #We extract the information from the games and organize the data according to their participants
+            for data in games_rank_inf:
+                if data == 'info':
+                    for dat in games_rank_inf[data]:
+                        if dat == 'participants':
+                            for row in games_rank_inf[data][dat]:
+                                participants_row = {}
+                                for head in headers:
+                                    participants_row[head] = row[head]
+                                participants.append(participants_row)
+                            df = pd.DataFrame(participants)
+                            i+= 1
+            data_games.append(df)
+        logger.info('Successfully saved games')
+        return data_games
 
-        #We extract the information from the games and organize the data according to their participants
-        for data in games_rank_inf:
-            if data == 'info':
-                for dat in games_rank_inf[data]:
-                    if dat == 'participants':
-                        for row in games_rank_inf[data][dat]:
-                            participants_row = {}
-                            for head in headers:
-                                participants_row[head] = row[head]
-                            participants.append(participants_row)
-                        df = pd.DataFrame(participants)
-        data_games.append(df)
-
-    return data_games
+    except:
+        logger.info('Failed to save data')
 
 def save_data_csv(data_games:list, user:str) -> bool:
     try:
@@ -138,9 +167,10 @@ def save_data_csv(data_games:list, user:str) -> bool:
         for game in range(len(data_games)):
             name = root+"/files/"+ user +" "+str(game+1)+".csv"
             data_games[game].to_csv(name, index=False)
+        logger.info('Successful CSV file creation')
         return True
-
     except:
+        logger.info('Failed to create CSV files')
         return False
 
 def main ():
