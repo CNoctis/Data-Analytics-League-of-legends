@@ -214,7 +214,7 @@ def save_data_csv(data_games:list, user:str) -> bool:
         return False
 
 def user_data():
-    user_dt = UserData('xxx.xxxx', 'CNoctisx', 'LAS', '2022/06/01')
+    user_dt = UserData('xxx.xxx.xxx', 'CNoctisx', 'LAS', '2022/06/01')
     return user_dt
 
 
